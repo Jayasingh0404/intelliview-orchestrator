@@ -1,138 +1,99 @@
-# IntelliView Orchestrator
+# AI Response Quality Dashboard
 
-> **AI-powered interview orchestration platform with real-time monitoring, multi-provider AI evaluation, and fault-tolerant distributed processing.**
+An interactive, premium dashboard to monitor, search, and analyze automated candidate technical answer evaluations.
 
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688.svg)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/UI-Next.js_14-000.svg)](https://nextjs.org)
-[![CI](https://img.shields.io/badge/CI-passing-brightgreen.svg)](./.github/workflows/ci.yml)
+Serves as an analytics interface for the automated answer evaluation engine, highlighting scoring patterns, confidence distributions, and database queries.
+
+## Key Features
+
+1. **KPI Statistics Cards**: Monitor total evaluations, average scores, mean evaluation confidence, and LLM vs Rule-Based breakdown ratio.
+2. **Dynamic Charting**:
+   - **Score Distribution**: Histogram grouping scores from 0 to 10.
+   - **Domain Breakdown**: Donut chart detailing proportions of DSA, DBMS, and OS questions.
+   - **Score & Volume Trend**: 30-day timeline showing average evaluation score and request counts per day.
+   - **Method Proportions**: Visualizing LLM API usage vs fallback rule-based matching.
+3. **Advanced Log Explorer**:
+   - Live text search across all questions, answers, and feedback text.
+   - Filtering by domain (DSA, DBMS, OS), evaluation method, and score ranges.
+   - Full sorting support on ID, Timestamp, Domain, Score, Confidence, and Method.
+   - Detail inspect modal with full text viewing.
+4. **Live Interactive Sandbox**: Submit new answers for automated evaluation directly from the UI and see results reflected instantly.
+5. **No Heavy Database Setup**: Uses a local SQLite database (`evaluation_logs.db`) with automatic table creation and schema init on startup.
 
 ---
 
-## Quick Start
-
-```bash
-git clone https://github.com/rajat-wyrm/intelliview-orchestrator
-cd intelliview-orchestrator
-cp .env.example .env          # edit API_TOKEN, database credentials
-docker compose up -d --build
-```
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Frontend** | http://localhost:3000 | Dashboard UI |
-| **API** | http://localhost:8000 | REST API (docs at `/docs`) |
-| **Prometheus** | http://localhost:9090 | Metrics |
-| **Grafana** | http://localhost:3001 | Dashboards (admin/admin) |
-
 ## Architecture
 
-```
-┌───────────────────┐     ┌──────────────────┐
-│  Next.js Dashboard│────▶│  FastAPI Backend  │
-│  (Port 3000)      │     │  (Port 8000)      │
-└───────────────────┘     └────┬───────┬──────┘
-                               │       │
-                    ┌──────────▼─┐  ┌──▼──────────┐
-                    │   Redis    │  │  PostgreSQL  │
-                    │  (Cache)   │  │  (Truth)     │
-                    └──────┬─────┘  └─────────────┘
-                           │
-              ┌────────────▼────────────┐
-              │   Celery Worker Nodes   │
-              │  video │ audio │ eval   │
-              └─────────────────────────┘
+```mermaid
+graph TD
+    UI[Frontend Dashboard<br>HTML / CSS / JS] -->|HTTP Request| API[FastAPI Server]
+    API -->|Read/Write Logs| DB[(SQLite Database<br>evaluation_logs.db)]
+    API -->|Evaluate Answers| Evaluator[Automated Evaluator Engine]
+    Evaluator -->|Primary/Fallback API| LLM[Gemini / OpenAI APIs]
+    Evaluator -->|No API Key Fallback| RuleEngine[Rule-Based Keyword Filter]
 ```
 
-## Features
+---
 
-### Real-time Interview Monitoring
-- **Live video/audio feed** with browser-based camera access
-- **Screen lock** with auto-lock after inactivity and PIN unlock
-- **Moment tracking** — logs every key event during interviews
-- **WebSocket push** for instant dashboard updates
+## Setup & Running Guide
 
-### Multi-Provider AI Evaluation
-- **Gemini** (Google) — primary evaluation and question generation
-- **Grok** (xAI) — fallback for answer scoring
-- **OpenAI** (GPT-4o) — additional fallback
-- Automatic provider fallback with zero downtime
+### 1. Requirements
 
-### Production Infrastructure
-- **Prometheus + Grafana** dashboards out of the box
-- **Circuit breaker** for Redis fault tolerance
-- **Rate limiting** and request validation middleware
-- **Structured audit logging** for compliance
-- **Neon DB / cloud PostgreSQL** SSL support
+- Python 3.10 or higher
+- API keys (at least one of OpenAI or Gemini) to run LLM evaluations. (The system degrades gracefully to the rule-based keyword filter if keys are absent.)
 
-### Dashboard Pages
-- **Overview** — system health, worker status, live sparklines
-- **Sessions** — active/completed/failed with pipeline visualization
-- **Interview** — real-time video, audio viz, AI feedback, risk score
-- **Candidates** — profiles, history, performance analytics
-- **Workers** — load balancing, capacity, heartbeat monitoring
-- **Analytics** — risk distribution, failure breakdown, trend charts
-- **Settings** — token management, theme, strategy switching
+### 2. Install Dependencies
 
-## Configuration
-
-All settings via environment variables (or `.env`):
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `REDIS_URL` | `redis://localhost:6379/0` | Cache + Celery broker |
-| `POSTGRES_HOST` | `localhost` | Database host |
-| `DATABASE_SSLMODE` | `disable` | Set `require` for Neon DB |
-| `GEMINI_API_KEY` | — | Google Gemini API key |
-| `GROK_API_KEY` | — | xAI Grok API key |
-| `API_TOKEN` | `dev-token-change-me` | Auth token for mutations |
-| `SCREEN_LOCK_PIN` | `1234` | Dashboard screen lock PIN |
-
-## API Reference
-
-Full OpenAPI docs at `/docs` when running. Key endpoints:
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/start-interview` | Yes | Start a new interview session |
-| `GET` | `/active-sessions` | No | List active sessions |
-| `GET` | `/session-status/{id}` | No | Session details + risk score |
-| `POST` | `/interviews/ask-question` | Yes | Get next interview question |
-| `POST` | `/interviews/submit-answer` | Yes | Submit answer for evaluation |
-| `GET` | `/candidates` | No | List candidate profiles |
-| `GET` | `/system-health` | No | Full system health check |
-| `GET` | `/metrics` | No | Prometheus metrics |
-
-## Development
+Install the requirements from the root of the project directory:
 
 ```bash
-# Backend
-python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn orchestrator.main:app --reload
-
-# Frontend
-cd frontend && npm install && npm run dev
-
-# Tests
-pytest tests/ --ignore=tests/test_e2e_smoke.py -v
-
-# Lint
-ruff check . && ruff format --check .
 ```
 
-## Tech Stack
+### 3. Configuration
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Python 3.11+, FastAPI, Celery, SQLAlchemy 2.0 |
-| Frontend | Next.js 14, React 18, Tailwind CSS, Recharts |
-| Database | PostgreSQL (Neon DB compatible) |
-| Cache | Redis 7 |
-| AI | Gemini, Grok, OpenAI (pluggable) |
-| Monitoring | Prometheus, Grafana |
-| Deploy | Docker Compose |
+Configure your environment keys inside the `.env` file in the root directory:
 
-## License
+```env
+# API Keys
+GEMINI_API_KEY=your-gemini-key
+OPENAI_API_KEY=your-openai-key
 
-MIT — [Rajat Kumar](https://github.com/rajat-wyrm)
+# Configuration Options
+LLM_PROVIDER=gemini       # preferred model provider: gemini or openai
+GEMINI_MODEL=gemini-2.5-flash
+OPENAI_MODEL=gpt-4o-mini
+MIN_RELEVANCE_THRESHOLD=0.1
+DB_PATH=evaluation_logs.db
+```
+
+### 4. Running the Dashboard
+
+Start the application with the startup script:
+
+```bash
+./run.sh
+```
+
+Or run manually:
+
+```bash
+PYTHONPATH=. uvicorn app.main:app --reload --port 8000
+```
+
+> **Note**: On the very first run, `run.sh` will automatically run `app/seed.py` to seed the database with **50 mock evaluation logs** spanning the last 30 days. This populates your charts and logs instantly!
+
+- **Dashboard UI**: [http://127.0.0.1:8000/dashboard](http://127.0.0.1:8000/dashboard)
+- **API Documentation**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+---
+
+## Running Unit Tests
+
+Run the test suite to verify correctness:
+
+```bash
+python3 -m pytest tests/ -v
+```
+
+All unit tests run inside an in-memory SQLite configuration (`:memory:`) to ensure no side effects or dev data pollution.
